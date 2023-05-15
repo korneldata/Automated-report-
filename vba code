@@ -1,0 +1,160 @@
+Sub AutoReport()
+
+Dim FileDir As String
+Dim FileCrit As String
+Dim WorkbookName As String
+Dim WorkbookOpen As Workbook
+Dim MainRepWb As Workbook
+Dim MainRepWs As Worksheet
+
+Set MainRepWb = ThisWorkbook
+Set MainRepWs = MainRepWb.ActiveSheet
+
+'increasing performance
+Application.ScreenUpdating = False
+
+'turning off alerts which could interrupt running macro
+Application.DisplayAlerts = False
+
+'generating column headers for main report
+With ActiveSheet
+
+.Range("A1") = "Region"
+.Range("B1") = "State"
+.Range("C1") = "Retailer"
+.Range("D1") = "Invoice Date"
+.Range("E1") = "Product"
+.Range("F1") = "Total Sales"
+
+End With
+
+'searched folder path
+FileDir = "C:\Users\Nowy_użytkownik\Desktop\copy_data_from_workbooks\"
+
+'searched file name and extension
+FileCrit = "regional_report*.xls*"
+
+WorkbookName = Dir(FileDir & FileCrit)
+
+'looping through each regional report in folder
+Do While Len(WorkbookName) > 0
+    
+    'last row of the main report
+    LastRow = Sheet1.Cells(Rows.Count, 1).End(xlUp).Row
+    
+    'opening file with regional reports
+    Set WorkbookOpen = Workbooks.Open(FileDir & WorkbookName)
+    
+    'last row in regional reports
+    Lrow = WorkbookOpen.ActiveSheet.Cells(Rows.Count, 1).End(xlUp).Row
+    
+    'copying data from regional reports to main report
+    WorkbookOpen.ActiveSheet.Range("A2:F" & Lrow).Copy
+    Sheet1.Range("A" & LastRow + 1).PasteSpecial (xlPasteValues)
+    
+    'closing regional report
+    WorkbookOpen.Close False
+
+    WorkbookName = Dir
+
+Loop
+
+'unifying date format in main report
+Sheet1.Columns("D:D").NumberFormat = "dd/mm/yyyy"
+
+'adjusting column width in main report
+Sheet1.UsedRange.EntireColumn.AutoFit
+
+'creating table in main report
+Sheet1.ListObjects.Add(SourceType:=xlSrcRange, Source:=Range("A1").CurrentRegion) _
+.Name = "Main_report"
+
+Dim pTabRep As Workbook
+Set pTabRep = Workbooks.Add
+
+Dim wsPivot As Worksheet
+Dim pC As PivotCache
+Dim pTab As PivotTable
+
+Set wsPivot = pTabRep.ActiveSheet
+
+'pivot cache
+Set pC = pTabRep.PivotCaches.Create(SourceType:=xlDatabase, _
+SourceData:=MainRepWs.Range("Main_report[#All]"))
+
+'creating empty pivot table in new workbook
+Set pTab = pC.CreatePivotTable(TableDestination:=wsPivot.Range("A2"), _
+TableName:="Sales_Report")
+
+'adding "region" data to rows in pivot table
+With pTab.PivotFields("Region")
+
+.Orientation = xlRowField
+.Position = 1
+.Name = "Region"
+
+End With
+
+'adding "states" data to rows in pivot table
+With pTab.PivotFields("State")
+
+.Orientation = xlRowField
+.Position = 2
+
+End With
+
+'adding "retailer" data to columns in pivot table
+With pTab.PivotFields("Retailer")
+
+.Orientation = xlColumnField
+.Position = 1
+.Name = "Retailer"
+
+End With
+
+'adding "total sales" (as a sum) to data field in pivot table and formatting numbers
+With pTab.PivotFields("Total Sales")
+
+.Orientation = xlDataField
+.Function = xlSum
+.NumberFormat = "#,##0"
+.Name = "Sales Breakdown"
+
+End With
+
+'formatting pivot table
+With pTab
+
+.ShowTableStyleRowStripes = True
+.TableStyle2 = "PivotStyleLight6"
+
+End With
+
+pTab.PivotFields("Region").ShowDetail = False
+
+Dim pChart As Shape
+Dim Ch As Chart
+
+'adding stacked bar pivot chart
+Set pChart = wsPivot.Shapes.AddChart2(Style:=286, XlChartType:=xl3DColumnClustered, _
+Left:=600, Top:=20)
+
+Set Ch = pChart.Chart
+
+Ch.SetSourceData pTab.TableRange1
+
+'saving workbook containing pivot table and pivot chart
+pTabRep.SaveAs "C:\Users\Nowy_użytkownik\Desktop\copy_data_from_workbooks\Pivot_table_report"
+
+'copying data from main report to separate csv file
+Dim CsvPath As String
+CsvPath = "C:\Users\Nowy_użytkownik\Desktop\copy_data_from_workbooks" + "\csv_report.csv"
+
+MainRepWs.Copy
+MainRepWb.SaveAs FileName:=CsvPath, FileFormat:=xlCSV, CreateBackup:=True
+
+Application.DisplayAlerts = True
+Application.ScreenUpdating = True
+
+End Sub
+
